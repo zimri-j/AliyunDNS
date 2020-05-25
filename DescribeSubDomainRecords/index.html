@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Aliyun DescribeSubDomainRecords</title>
+<!-- 加载HMAC-SHA1加解密 -->
+<script type="text/javascript" src="hmac-sha1.js"></script>
+
+<!-- 加载base64加解密 -->
+<script type="text/javascript" src="enc-base64.js"></script>
+</head>
+<body>
+    <pre id="status">Aliyun DNS INFO</pre>
+</body>
+<script>
+//获取URL中GET参数
+function getQueryVariable(variable)
+{
+       var query = window.location.search.substring(1);
+       var vars = query.split("&");
+       for (var i=0;i<vars.length;i++) {
+               var pair = vars[i].split("=");
+               if(pair[0] == variable){return pair[1];}
+       }
+       return(false);
+}
+//打印
+console.log("keyId:",getQueryVariable("keyid"));
+console.log("KeySecret:",getQueryVariable("keysecret"));
+console.log("SubDomain:",getQueryVariable("subdomain"));
+
+//公共请求参数 https://help.aliyun.com/document_detail/29745.html
+var Format = "JSON";
+var Version = "2015-01-09";
+var AccessKeyId = getQueryVariable("KeyId");
+var AccessKeySecret  = getQueryVariable("KeySecret");
+var SignatureMethod = "HMAC-SHA1";
+var SignatureVersion = "1.0";
+var SignatureNonce = Date.now().toString();
+
+/*
+*  Aliyun要求的为的ISO8601UTC 格式为YYYY-MM-DDThh:mm:ssZ 
+*  UTCstring 时间
+*/
+var dataTime = new Date();
+var YYYY = dataTime.getUTCFullYear().toString();
+var MM   = (dataTime.getUTCMonth()+1).toString();
+var DD   = dataTime.getUTCDate().toString();
+var hh   = dataTime.getUTCHours().toString();
+var mm   = dataTime.getUTCMinutes().toString();
+var ss   = dataTime.getUTCSeconds().toString();
+//个位数前无0  自动补0
+function timeAdd0(str) {
+    if(str.length<=1){
+        str='0'+str;
+    }
+    return str
+}
+YYYY = timeAdd0(YYYY);
+MM = timeAdd0(MM);
+DD = timeAdd0(DD);
+hh = timeAdd0(hh);
+mm = timeAdd0(mm);
+ss = timeAdd0(ss);
+
+//拼接时间
+var UTCstring = YYYY+'-'+MM+'-'+DD+'T'+hh+':'+mm+':'+ss+'Z';
+
+//打印UTC时间
+console.log('UTCstring:', UTCstring);
+/*
+*  UTCstring 时间 End
+*/
+
+
+
+
+/* 
+* Signature签名部分 
+* StringToSign= HTTPMethod + “&” + percentEncode(“/”) + ”&” + percentEncode(CanonicalizedQueryString)
+*/
+var Action = "DescribeSubDomainRecords";
+var SubDomain = getQueryVariable("SubDomain");
+//签名前的请求URL
+var arr = [
+        {name:"Format",value:Format},
+        {name:"AccessKeyId",value:AccessKeyId},
+        {name:"Action",value:Action},
+        {name:"SignatureMethod",value:SignatureMethod},
+        {name:"SubDomain",value:SubDomain},
+        {name:"SignatureNonce",value:SignatureNonce},
+        {name:"SignatureVersion",value:SignatureVersion},
+        {name:"Version",value:Version},
+        {name:"Timestamp",value:UTCstring}
+];
+
+arr = arr.sort(function (a, b) {
+    return a.name.localeCompare( b.name );
+});
+
+//打印
+//console.log(arr);
+//字符替换
+function myJSON(){
+    var myJSON = JSON.stringify(arr);
+    myJSON = myJSON.replace(/"name"/g, "");
+    myJSON = myJSON.replace(/","value":"/g, "=");
+    myJSON = myJSON.replace(/"},{:"/g, "&");
+    myJSON = myJSON.replace(/"/g, "");
+    myJSON = myJSON.replace(/{:/g, "");
+    myJSON = myJSON.replace(/}/g, "");
+    myJSON = myJSON.replace("[", "");
+    myJSON = myJSON.replace("]", "");
+    return myJSON;
+} 
+
+console.log("JSONtoURL:",myJSON());
+
+StringToSign = myJSON();
+
+//转URL编码
+StringToSign = 'GET&%2F&'+encodeURIComponent(StringToSign);
+
+//字符替换
+StringToSign = StringToSign.replace(/%3A/g, "%253A");
+//打印
+console.log('StringToSign', StringToSign);
+
+ 
+//HMAC-SHA1 并按照Base64编码规则把上面的HMAC值编码成字符串
+function Signature() {
+   var key= AccessKeySecret+'&';
+   var Signature = CryptoJS.HmacSHA1(StringToSign,key);
+   Signature = CryptoJS.enc.Base64.stringify(Signature);
+  return Signature;
+}
+//转URL编码
+Signature = encodeURIComponent(Signature());
+console.log('StringToSign', Signature);
+/* 
+* Signature签名End
+*/
+
+
+
+/*
+* 拼接最后URL 并发起请求
+*/
+//Aliyun URL
+var Alidnsurl = "https://alidns.aliyuncs.com/";
+UTCstring = encodeURIComponent(UTCstring);
+
+
+//拼接最终请求URL
+var Signurl = '?Action='+Action+
+'&SubDomain='+SubDomain+
+'&Format='+Format+
+'&AccessKeyId='+AccessKeyId+
+'&SignatureMethod='+SignatureMethod+
+'&SignatureNonce='+SignatureNonce+
+'&SignatureVersion='+SignatureVersion+
+'&Version='+Version+
+'&Signature='+Signature+
+'&Timestamp='+UTCstring;
+
+//console.log('URL:', Alidnsurl+Signurl);
+
+//发起请求
+fetch(Alidnsurl+Signurl,{method:'GET'})
+  .then(response => response.text())
+  .then(result => {
+      console.log(result)
+      document.getElementById("status").innerHTML=(result);
+  })
+  .catch(error => console.log('error', error));
+
+
+</script>
+</html>
